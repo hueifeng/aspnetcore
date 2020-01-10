@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
@@ -40,8 +39,10 @@ namespace Wasm.Performance.Driver
             // This write is required for the benchmarking infrastructure.
             Console.WriteLine("Application started.");
 
-            using var browser = await Selenium.CreateBrowser(seleniumPort);
+            var cancellationToken = new CancellationTokenSource(Timeout);
+            cancellationToken.Token.Register(() => benchmarkResult.TrySetException(new TimeoutException($"Timed out after {Timeout}")));
 
+            using var browser = await Selenium.CreateBrowser(seleniumPort, cancellationToken.Token);
             using var testApp = StartTestApp();
             using var benchmarkReceiver = StartBenchmarkResultReceiver();
 
@@ -53,9 +54,6 @@ namespace Wasm.Performance.Driver
             var launchUrl = $"{testAppUrl}?resultsUrl={UrlEncoder.Default.Encode(receiverUrl)}#automated";
             browser.Url = launchUrl;
             browser.Navigate();
-
-            var cancellationToken = new CancellationTokenSource(Timeout);
-            cancellationToken.Token.Register(() => benchmarkResult.TrySetException(new TimeoutException($"Timed out after {Timeout}")));
 
             var results = await benchmarkResult.Task;
             FormatAsBenchmarksOutput(results);
